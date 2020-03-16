@@ -4,6 +4,26 @@
 - add User,Pass,Host,Port as a `json` fields
 - Add options to select other fields rather `participants`
 
+[example json file]:
+```
+{
+  "session1": {
+    "session": {
+      "login": null, 
+      "queries": []
+    }
+  }, 
+  "session2": {
+    "session": {
+      "login": "10.164.76.246:8888:hive", 
+      "queries": [
+        "select * from kafka_events_12 where product_type = 'VOIP' and topic = 'mcapi.avro.pri.decoded' order by start_time desc limit 50", 
+        "select * from kafka_events_12 where product_type = 'VIBER' and topic = 'mcapi.avro.pri.decoded' order by start_time desc limit 50"
+      ]
+    }
+  }
+}
+```
 
 
 
