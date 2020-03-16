@@ -3,10 +3,11 @@ import psycopg2
 from pyhive import presto
 import json
 import os
+from db import dbutil as DB
 
 
 
-G_IMODE = False
+G_IMODE = True
 #"10.164.76.246", 8888, 'hive', paswd=None
 
 '''
@@ -91,6 +92,9 @@ class AppCtx:
         n = str("session-%s-%s.ses" % (date.today(), h))
         self._fp = open(n, "w")
         self._jobjects = []
+        self._db = DB()
+        self._db.load('db.json')
+
 
 
     def jdata(self):
@@ -143,6 +147,7 @@ class AppCtx:
 
 
     def writepretty(self, ob):
+        self._fp.write("\r\n----\r\n")
         json.dump(ob, self._fp, skipkeys=False, ensure_ascii=True, check_circular=True,allow_nan=True, cls=None, indent=2, separators=None,encoding='utf-8', default=None, sort_keys=False)
         self._fp.flush()
 
@@ -154,14 +159,66 @@ class AppCtx:
             self._fp.flush()
 
 
-    def run(self):
-        """interactive mode"""
+    def print_dbmode(self, msg):
+        print str(">>>%s" % msg)
+
+
+    def db_run(self, name):
+        name = name.rstrip("\r").rstrip("\n")
+        print "--------------------------------------------------------------"
+        print "Use !login! or !l! to login from user in session %s."
+        print "Use !at! to select query to execute."
+        print"\t when prompted ?> enter index."
+        print "Use !quit! or !q! to return to `imode`."
+        blog = False
+
+        
         while True:
             rd = raw_input("db>")
+            if "!quit!" in rd.lower() or "!q!" in rd.lower():
+                break
+            if "!login" in rd.lower() or "!l!" in rd.lower():
+                conn = self._db.get_login(name)
+                conn = conn.split(":")
+                blog = True
+                if len(conn) < 3:
+                    continue
+                elif len(conn) == 3:
+                    self.Hive(str(conn[0]), int(conn[1]), str(conn[2]).rstrip("\r").strip("\n"), None)
+                elif len(conn) == 4:
+                    self.Hive(conn[0], int(conn[1]), str(conn[2]).rstrip("\r").strip("\n"), str(conn[3]).rstrip("\r").strip("\n"))
+                else:
+                    print "Error in HIVE"
+                    blog = False
+
+            elif "!at!" in rd.lower():
+                if blog is False:
+                    print "Not logged in..."
+                else:
+                    i = input("?>")
+                    i = int(i)
+                    q = self._db.get_query_at(name, int(i))
+                    self.execute(q)
+                    for d in self.jdata():
+                        self.writepretty(d.participants())
+
+
+    def run(self):
+        """interactive mode - TODO: mark the commands used"""
+        while True:
+            rd = raw_input("imode>")
             if "!quit!" in rd.lower():
                 print "Bye"
                 self.finalize()
                 break
+            elif "!db!" in rd.lower():
+                self.print_dbmode("Use db file states...")
+                self.print_dbmode("sessions saved")
+                self.print_dbmode(self._db.get_all_sessions_cnt())
+                session = raw_input("select session: ")
+                self.db_run(session)
+                
+
             elif "!query!" in rd.lower() or "!q!" in rd.lower():
                 rrd = raw_input(">>>")
                 sqlq = self._qengine.Ex(rrd).compile()
@@ -173,7 +230,11 @@ class AppCtx:
             elif "!hive!" in rd.lower() or "!h!" in rd.lower():
                 #"10.164.76.246", 8888, 'hive', paswd=None
                 conn = raw_input("IP:PORT:USER:PASS>")
-                conn = conn.split(":")
+                try:
+                    conn = conn.split(":")
+                except:
+                    print "Invalid format!"
+                    continue
                 if len(conn) < 3:
                     continue
                 elif len(conn) == 3:
@@ -204,18 +265,22 @@ def reslove_args():
 
 ############################################################################################################################
 #App:
+
+
 if __name__ == "__main__":
 
     ip, port, user, passwd = None, None, None, None 
 
     if G_IMODE is False:
+        #test query 
+                    #.And("(identifiers like '%10.20.30.40%'")           \
+            #.Or("identifiers like '%10.242.50.240%')")          \
+
         app = AppCtx()
         app.Hive("10.164.76.246",8888,'hive', None)
         app.QE().Select("*", "kafka_events_12")                 \
             .Ex(" where product_type = 'VOIP'")                 \
             .And("topic = 'mcapi.avro.pri.decoded'")            \
-            .And("(identifiers like '%10.20.30.40%'")           \
-            .Or("identifiers like '%10.242.50.240%')")          \
             .Ex(" order by start_time desc limit 50")           \
             .compile()
 
