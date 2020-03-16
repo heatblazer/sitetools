@@ -133,17 +133,19 @@ class AppCtx:
         pass
     
     def execute(self, sqlq):
-        self._hive.execute(sqlq)
-        dat = self._hive.fetchall()
-        for d in dat:
-            jobj = json.loads(d[5])
-            if jobj is not None:
-                self._jobjects.append(KafkaOb(jobj))
-
+        try:
+            self._hive.execute(sqlq)
+            dat = self._hive.fetchall()
+            for d in dat:
+                jobj = json.loads(d[5])
+                if jobj is not None:
+                    self._jobjects.append(KafkaOb(jobj))
+        except Exception as ex:
+            print "Exception in executing {0} -> {1}".format(sqlq, ex.message)
 
     def finalize(self):
-        self._fp.flush()
         self._fp.close()
+        self._db.save()
 
 
     def writepretty(self, ob):
@@ -166,16 +168,16 @@ class AppCtx:
     def db_run(self, name):
         name = name.rstrip("\r").rstrip("\n")
         print "--------------------------------------------------------------"
-        print "Use !login! or !l! to login from user in session %s."
+        print "Use !login! or !l! to login from user in session: ", name
         print "Use !at! to select query to execute."
         print"\t when prompted ?> enter index."
         print "Use !quit! or !q! to return to `imode`."
         blog = False
 
-        
+        QueriesCnt = int(self._db.get_queries_count(name))
         while True:
             rd = raw_input("db>")
-            if "!quit!" in rd.lower() or "!q!" in rd.lower():
+            if "!quit!" in rd.lower() or "!q!" in rd.lower() or "!Q!" in rd.lower():
                 break
             if "!login" in rd.lower() or "!l!" in rd.lower():
                 conn = self._db.get_login(name)
@@ -195,11 +197,14 @@ class AppCtx:
                 if blog is False:
                     print "Not logged in..."
                 else:
-                    i = input("?>")
+                    prmpt = "[0-{0}]>".format(QueriesCnt-1)
+                    i = input(prmpt)
                     i = int(i)
                     q = self._db.get_query_at(name, int(i))
                     self.execute(q)
                     for d in self.jdata():
+                        print "************************"
+                        print d.participants()
                         self.writepretty(d.participants())
 
 
@@ -207,7 +212,7 @@ class AppCtx:
         """interactive mode - TODO: mark the commands used"""
         while True:
             rd = raw_input("imode>")
-            if "!quit!" in rd.lower():
+            if "!quit!" in rd.lower() or "!Q!" in rd:
                 print "Bye"
                 self.finalize()
                 break

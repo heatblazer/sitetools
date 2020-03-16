@@ -9,6 +9,7 @@ class dbutil(object):
 
 
     def __del__(self):
+        """RAII"""
         pass
 
 
@@ -73,7 +74,7 @@ class dbutil(object):
     def get_all_sessions_cnt(self):
         if self._db is not None:
             for q in self._db:
-                print str("session: %s : queries %s" % (q, self.get_queries_count(q)))
+                print str("session: {%s} : queries [%s]" % (q, self.get_queries_count(q)))
 
 
     def get_queries_count(self, name):
