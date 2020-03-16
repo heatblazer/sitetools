@@ -1,5 +1,8 @@
 [Prototype Readme.md]
 
+[TODO]:
+- add User,Pass,Host,Port as a `json` fields
+- Add options to select other fields rather `participants`
 
 
 

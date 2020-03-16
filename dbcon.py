@@ -167,6 +167,9 @@ class AppCtx:
 
     def db_run(self, name):
         name = name.rstrip("\r").rstrip("\n")
+        if self._db.exists(name) is False:
+            print "No session ", name, " in database"
+            return 
         print "--------------------------------------------------------------"
         print "Use !login! or !l! to login from user in session: ", name
         print "Use !at! to select query to execute."
@@ -221,6 +224,7 @@ class AppCtx:
                 self.print_dbmode("sessions saved")
                 self.print_dbmode(self._db.get_all_sessions_cnt())
                 session = raw_input("select session: ")
+                
                 self.db_run(session)
                 
 

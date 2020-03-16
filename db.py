@@ -25,6 +25,12 @@ class dbutil(object):
         pass
 
     
+    def exists(self, name):
+        if name in self._db:
+            return True
+        return False
+
+    
     def dumpall(self):
         if self._db is not None:
             for record in self._db:
