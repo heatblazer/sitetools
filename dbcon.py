@@ -6,7 +6,6 @@ import os
 from db import dbutil as DB
 
 
-
 G_IMODE = True
 #"10.164.76.246", 8888, 'hive', paswd=None
 
@@ -58,7 +57,7 @@ class QueryEngine:
 
 
 
-class KafkaOb(object):
+class KafkaEventsOb(object):
 
     def __init__(self, jobj):
         self._json = jobj
@@ -69,6 +68,41 @@ class KafkaOb(object):
             return self._json['participants']
         else:
             return None
+
+
+    def ip_connections(self):
+        if self._json['transport'] is not None:
+            return self._json['transport']['ip_connections']
+        return []
+
+
+    def ip_acces_nw(self):
+        if self._json['transport'] is not None:
+            return self._json['transport']['ip_access_network']
+        return []
+
+
+    def name_on_storage(self):
+        if self._json['content_files'] is not None:
+            cf = []
+            for i in self._json['content_files']:
+                cf.append(i['name_on_storage'])
+            return cf
+        return []
+
+
+    def path_on_storage(self):
+        if self._json['content_files'] is None:
+            cf = []
+            for i in self._json['content_files']:
+                cf.append(i['path_on_storage'])
+            return cf
+        return []
+
+
+    def call_id(self):
+        if self._json['call'] is not None:
+            return self._json['call']['call_id']
 
 
     def jobj(self):
@@ -139,7 +173,7 @@ class AppCtx:
             for d in dat:
                 jobj = json.loads(d[5])
                 if jobj is not None:
-                    self._jobjects.append(KafkaOb(jobj))
+                    self._jobjects.append(KafkaEventsOb(jobj))
         except Exception as ex:
             print "Exception in executing {0} -> {1}".format(sqlq, ex.message)
 
@@ -148,9 +182,15 @@ class AppCtx:
         self._db.save()
 
 
-    def writepretty(self, ob):
-        self._fp.write("\r\n----\r\n")
+    def writepretty(self, ob, opt=""):
+        self._fp.write(opt)
         json.dump(ob, self._fp, skipkeys=False, ensure_ascii=True, check_circular=True,allow_nan=True, cls=None, indent=2, separators=None,encoding='utf-8', default=None, sort_keys=False)
+        self._fp.write("\r\n")
+        self._fp.flush()
+
+
+    def delimit(self):
+        self._fp.write("\r\n------------\r\n")
         self._fp.flush()
 
 
@@ -208,7 +248,7 @@ class AppCtx:
                     for d in self.jdata():
                         print "************************"
                         print d.participants()
-                        self.writepretty(d.participants())
+                        self.writepretty(d)
 
 
     def run(self):
@@ -292,11 +332,28 @@ if __name__ == "__main__":
             .And("topic = 'mcapi.avro.pri.decoded'")            \
             .Ex(" order by start_time desc limit 50")           \
             .compile()
-
-        app.execute(str(app.QE()))
         
+        #for query kafka_events_*
+        app.execute(str(app.QE()))
+
         for d in app.jdata():
-            app.writepretty(d.participants())
+            app.delimit()
+            app.writepretty(d.call_id(), "CallID:\t")
+            nameonstorage = d.name_on_storage()
+            fileonstorage = d.path_on_storage()
+            ip_access_network = d.ip_acces_nw()
+            ip_connections = d.ip_connections()
+            for i in nameonstorage:
+                app.writepretty(i, "Name on storage:\t")
+            for j in fileonstorage:
+                app.writepretty(j, "File on storage:\t")
+            app.writepretty(d.participants(), "Participants:\t")
+            for k in ip_access_network:
+                app.writepretty(k)
+            for h in ip_connections:
+                app.writepretty(h)
+
+            app.delimit()
         pass
     else:
         app = AppCtx()        
