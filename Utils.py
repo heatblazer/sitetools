@@ -40,6 +40,7 @@ SHARED_SECRET_RESPONSE = 0x0102
 SHARED_SECRET_ERROR_RESPONSE = 0x0112
 ALLOCATE_REQUEST = 0x0003
 ALLOCATE_REQUEST_ERROR_RESPONSE = 0x0113
+FILLIN = 0x16FE
 
 ALLOCATE_SUCCESS_RESPONSE = 0x0103
 REFRESH_REQUEST = 0x0004
@@ -76,10 +77,13 @@ ERROR_CODE = 0x0009
 UNKNOWN_ATTRIBUTES = 0x000a
 REFLECTED_FROM = 0x000b
 XOR_PEER_ADDRESS = 0x0012
+XOR_RELAYED_ADDRESS = 0x0016
+DATA = 0x0013
 ICE_CONTROLED = 0x8029
 ICE_CONTROLLING = 0x802a
 XOR_MAPPED = 0x0020
 UNKNOWN = 0xc057
+
 
 class StunStatus:
 
@@ -118,7 +122,8 @@ class StunStatus:
                 ICE_CONTROLLING : "ICE CONTROLLING",
                 XOR_MAPPED : " XOR MAPPED ADDRESS ",
                 UNKNOWN : "UNKNOWN",
-                XOR_PEER_ADDRESS : "XOR PEER ADDRESS"
+                XOR_PEER_ADDRESS : "XOR PEER ADDRESS",
+                DATA : "DATA"
             }
 
 
@@ -145,7 +150,7 @@ class STUN(dpkt.Packet):
 #Packet, Time, Address A,Port A,Address B,Port B,STUN Command,Username,Username Sorted,XOR-PEER-ADDRESS
 
 class CsvEnums:             
-    rows = ["Packet", "Time","Address A", "Port A", "Address B", "Port B", "STUN Command", "Username", "Username Sorted", "XOR-PEER-ADDRESS"]
+    rows = ["Packet", "Time","Address A", "Port A", "Address B", "Port B", "STUN Command", "Username", "Username Sorted", "XOR-PEER-ADDRESS", "HAS CHILDREN", "ORIGIN"]
 
 
 class CapCtx:
@@ -160,6 +165,7 @@ class CapCtx:
         self.time = time
         self.counter = counter
         self.uname_sorted = None
+        self.has_children = False
 
     def user(self):
         if self.uname is not None:
@@ -169,6 +175,13 @@ class CapCtx:
             except:
                 return self.uname
         return None
+
+    def __lt__(self, other):
+        return self.counter < other.counter 
+
+    def __eq__(self, other):
+        return self.counter == other.counter 
+
 
 
     def user_fix(self):
@@ -200,7 +213,9 @@ class CapCtx:
             CsvEnums.rows[6]:self.message_type,
             CsvEnums.rows[7]:self.user(),
             CsvEnums.rows[8]:self.user_fix(),
-            CsvEnums.rows[9]:self.xor_p_address})
+            CsvEnums.rows[9]:self.xor_p_address, 
+            CsvEnums.rows[10]:self.has_children,
+            CsvEnums.rows[11]:self.counter})
              
 
 def tlv(buf):
@@ -307,6 +322,77 @@ class Utils(object):
         return allfiles
 
 
+    @staticmethod
+    def dump_stun(stun, m, ip_port, ts, frameno):
+        stuns = list()
+        #ip_port[0], ip_port[1], ip_port[2], ip_port[3],
+        if m.type not in StunStatus.messages:
+            return stuns
+        csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, frameno)
+        csvi.message_type = StunStatus.messages[m.type]
+        cutoff = int( len(stun) - len(m.data) )
+        transaction_id = []
+        for i in range(8, cutoff):
+            transaction_id.append(hex(stun[i]))
+        attrs = parse_attrs(m.data)         
+        for a in attrs:
+            if a[0] in StunStatus.attrs:
+                attr = int(a[0])
+                if attr is XOR_PEER_ADDRESS:
+                    xport = int ((a[1][2] << 8) | a[1][3])
+                    xport = (MAGIC_COOKIE >> 16) ^ xport
+                    ip_orig = a[1][4] << 24 | a[1][5] << 16 | a[1][6] << 8 | a[1][7]
+                    ip_orig ^= MAGIC_COOKIE
+                    ip_xtype = [(ip_orig >> 24) & 0xFF, (ip_orig >> 16) & 0xFF, (ip_orig >> 8) & 0xFF, ip_orig & 0xFF]
+                    k =  "{}.{}.{}.{} : {}".format(ip_xtype[0], ip_xtype[1], ip_xtype[2], ip_xtype[3], xport)
+                    csvi.xor_p_address = k
+                elif attr is XOR_MAPPED:
+                    pass
+                elif attr is USERNAME:
+                    csvi.uname = attrs[0][1]
+                    #if m.type is ALLOCATE_REQUEST or m.type is CREATE_PERMISSION: #maybe decide for later...
+                    #csvi.uname = attrs[1][1]
+                elif attr is DATA:
+                    csvi.has_children = True
+                    s = STUN(attrs[1][1])
+                    stuns = stuns + Utils.dump_stun(attrs[1][1], s, ip_port, ts, csvi.counter)
+
+        stuns.append(csvi)
+        return stuns
+
+
+    @staticmethod
+    def pcap_walker(packets):
+        def printip(e):
+            try:
+                ip_hdr = e.data
+                dst_ip_addr_str = socket.inet_ntoa(ip_hdr.dst)
+                src_ip_addr_str = socket.inet_ntoa(ip_hdr.src)
+                dport = ip_hdr.data.dport
+                sport = ip_hdr.data.sport
+                return (src_ip_addr_str, sport, dst_ip_addr_str, dport)
+            except:
+                return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
+
+        csvdata = list()
+        for i in range(0, len(packets)):
+            ts, pkt = (packets[i])
+            ts = str(datetime.datetime.utcfromtimestamp(ts))
+            eth=dpkt.ethernet.Ethernet(pkt)       
+            stun = eth.data.data.data           
+            ip_port = printip(eth)
+            #csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, i+1)            
+            m = STUN(stun)
+            if m.type not in StunStatus.messages:               
+                continue            
+            if m.type >= 0x4000 and m.type <= 0x4004:
+                m2 = STUN(stun[4:])   
+                m = m2 #swap with TURN
+            csvis = Utils.dump_stun(stun, m, ip_port, ts, i+1)   
+            csvdata += csvis
+        return csvdata
+
+
 
     @staticmethod
     def parse_stun(snoop):
@@ -333,7 +419,12 @@ class Utils(object):
                 ip_port = printip(eth)
                 csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, counter)            
             
-                m = STUN(stun)        
+                m = STUN(stun)     
+                
+                if m.type >= 0x4000 and m.type <= 0x4004:
+                    m2 = STUN(stun[4:])   
+                    m = m2 #swap with TURN
+
                 if m.type in StunStatus.messages:
                     csvi.message_type = StunStatus.messages[m.type]
                     cutoff = int( len(stun) - len(m.data) )
@@ -368,6 +459,9 @@ class Utils(object):
                                 ip_xtype = [(ip_orig >> 24) & 0xFF, (ip_orig >> 16) & 0xFF, (ip_orig >> 8) & 0xFF, ip_orig & 0xFF]
                                 k =  "{}.{}.{}.{} : {}".format(ip_xtype[0], ip_xtype[1], ip_xtype[2], ip_xtype[3], xport)
                                 csvi.xor_p_address = k
+                            elif attr is DATA:
+                                innerstun = STUN(attrs[1][1])
+                                print (innerstun.type)
                             elif attr is XOR_MAPPED:
                                 pass
                             elif attr is USERNAME:
@@ -375,11 +469,13 @@ class Utils(object):
                                 if m.type is ALLOCATE_REQUEST or m.type is CREATE_PERMISSION:
                                     csvi.uname = attrs[1][1]
                     csvdata.append(csvi)
-                    counter+=1
+               
                 else:
                     csvi.message_type = hex(m.type)
-                    #print("[[ UNKNOWN STATUS ]]") #should not get here if full STUN support implemented
+ #                    print("[[ UNKNOWN STATUS ]]") #should not get here if full STUN support implemented
+                counter+=1
             except:
+                print("Exception ...")
                 pass
         return csvdata
 
@@ -391,25 +487,20 @@ if __name__ == "__main__":
     for f in files:
         if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
             pcapfile = f
-            csv_items = Utils.parse_stun(pcapfile)
+            #Utils.pcap_walker(pcapfile)
+            if False:
+                csv_items = Utils.parse_stun(pcapfile)
+               
+            else:
+                caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
+                caplst = caps.readpkts()
+                csv_items = Utils.pcap_walker(caplst)
+            
+            csv_items.sort()
             with  open("{}.csv".format(pcapfile), 'w', newline='') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=CsvEnums.rows)
                 writer.writeheader()
                 for csvi in csv_items:
                     csvi.ouput(writer)
-        
 
-'''
-    pcap_file = "08_Telegram_7_IOS100toAN153.pcap"
-    csv_items = Utils.parse_stun(pcap_file)    
-    csvname = "defaultdump.csv"
 
-    csvfile =  open(csvname, 'w', newline='')
-    writer = csv.DictWriter(csvfile, fieldnames=CsvEnums.rows)
-    writer.writeheader()
-    for csvi in csv_items:
-        csvi.ouput(writer)
-    
-'''
-
-    
