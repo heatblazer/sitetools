@@ -374,6 +374,7 @@ class Utils(object):
             except:
                 return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
 
+        missing = 0
         csvdata = list()
         for i in range(0, len(packets)):
             ts, pkt = (packets[i])
@@ -381,15 +382,21 @@ class Utils(object):
             eth=dpkt.ethernet.Ethernet(pkt)       
             stun = eth.data.data.data           
             ip_port = printip(eth)
-            #csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, i+1)            
+                        
             m = STUN(stun)
-            if m.type not in StunStatus.messages:               
-                continue            
             if m.type >= 0x4000 and m.type <= 0x4004:
                 m2 = STUN(stun[4:])   
                 m = m2 #swap with TURN
+                
+            if m.type not in StunStatus.messages:
+                print ("Missing ", hex(m.type))
+                missing += 1
+                continue            
+            
             csvis = Utils.dump_stun(stun, m, ip_port, ts, i+1)   
             csvdata += csvis
+        
+        print("missing not stun or not implemented ", missing)
         return csvdata
 
 
