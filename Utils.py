@@ -27,6 +27,8 @@ import struct
 
 MAGIC_COOKIE = 0x2112A442
 
+TURN_RANGE_MIN = 0x4000
+TURN_RANGE_MAX = 0x4004
 
 # Message Types
 BINDING_REQUEST = 0x0001
@@ -171,7 +173,7 @@ class CapCtx:
         if self.uname is not None:
             try:
                 self.uname = self.uname.decode('ascii')
-                return self.uname
+                return str(self.uname)
             except:
                 return self.uname
         return None
@@ -197,7 +199,7 @@ class CapCtx:
                     return uname
             except:
                 return self.uname
-        return None
+        return self.uname
 
 
 #Packet, Time, Address A,Port A,Address B,Port B, STUN Command ,Username,Username Sorted,XOR-PEER-ADDRESS
@@ -334,7 +336,8 @@ class Utils(object):
         transaction_id = []
         for i in range(8, cutoff):
             transaction_id.append(hex(stun[i]))
-        attrs = parse_attrs(m.data)         
+        attrs = parse_attrs(m.data)
+        sindex = 0         
         for a in attrs:
             if a[0] in StunStatus.attrs:
                 attr = int(a[0])
@@ -349,21 +352,32 @@ class Utils(object):
                 elif attr is XOR_MAPPED:
                     pass
                 elif attr is USERNAME:
-                    csvi.uname = attrs[0][1]
-                    #if m.type is ALLOCATE_REQUEST or m.type is CREATE_PERMISSION: #maybe decide for later...
-                    #csvi.uname = attrs[1][1]
+                    csvi.uname = attrs[sindex][1]
                 elif attr is DATA:
                     csvi.has_children = True
-                    s = STUN(attrs[1][1])
-                    stuns = stuns + Utils.dump_stun(attrs[1][1], s, ip_port, ts, csvi.counter)
+                    s = STUN(attrs[sindex][1])
+                    stuns = stuns + Utils.dump_stun(attrs[sindex][1], s, ip_port, ts, csvi.counter)
+            sindex+=1
 
         stuns.append(csvi)
         return stuns
 
+    @staticmethod
+    def btoi(bdat, endiness=False):
+        integerpart = []
+        for b in bdat:
+            integerpart.append(int(b))
+
+        if endiness is False:
+            integerpart.reverse()
+        result = 0
+        for i in range(0, len(integerpart)):
+            result |= integerpart[i] << (i * 8)
+                    
+        return result 
 
     @staticmethod
-    def pcap_walker(packets):
-        def printip(e):
+    def printip(e):
             try:
                 ip_hdr = e.data
                 dst_ip_addr_str = socket.inet_ntoa(ip_hdr.dst)
@@ -374,118 +388,59 @@ class Utils(object):
             except:
                 return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
 
-        missing = 0
+
+
+    class StunAnalyzeApp:
+        #TODO: make it a functor for stun sepcifi
+        def __init__(self):
+            pass
+
+        def __call__(self):
+            pass
+
+
+
+    @staticmethod
+    def pcap_walker(packets):
+        missing = {}
         csvdata = list()
         for i in range(0, len(packets)):
             ts, pkt = (packets[i])
             ts = str(datetime.datetime.utcfromtimestamp(ts))
             eth=dpkt.ethernet.Ethernet(pkt)       
             stun = eth.data.data.data           
-            ip_port = printip(eth)
-                        
+            ip_port = Utils.printip(eth)
+            cookie = 0
+            cookiestun, cookieturn  = Utils.btoi(stun[4:8]), Utils.btoi(stun[8:12])
+            if cookiestun != MAGIC_COOKIE and cookieturn != MAGIC_COOKIE:
+                continue
+
             m = STUN(stun)
-            if m.type >= 0x4000 and m.type <= 0x4004:
+            if m.type >= TURN_RANGE_MIN and m.type <= TURN_RANGE_MAX:
                 m2 = STUN(stun[4:])   
                 m = m2 #swap with TURN
-                
-            if m.type not in StunStatus.messages:
-                print ("Missing ", hex(m.type))
-                missing += 1
-                continue            
+                cookie = cookieturn
+            else:
+                cookie = cookiestun
+            
+            if cookie != MAGIC_COOKIE: #m.type not in StunStatus.messages:
+                continue
+            else:
+                if m.type not in StunStatus.messages:
+                    if m.type not in missing:
+                        missing.update({m.type:1})
+                    else:
+                        missing[m.type] += 1
+                    continue            
             
             csvis = Utils.dump_stun(stun, m, ip_port, ts, i+1)   
             csvdata += csvis
-        
-        print("missing not stun or not implemented ", missing)
+#        for kv in missing:
+#            print ("type: ", hex(kv), " count:", missing[kv])        
         return csvdata
 
 
-
-    @staticmethod
-    def parse_stun(snoop):
-        def printip(e):
-            try:
-                ip_hdr = e.data
-                dst_ip_addr_str = socket.inet_ntoa(ip_hdr.dst)
-                src_ip_addr_str = socket.inet_ntoa(ip_hdr.src)
-                dport = ip_hdr.data.dport
-                sport = ip_hdr.data.sport
-                return (src_ip_addr_str, sport, dst_ip_addr_str, dport)
-            except:
-                return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
-        
-        csvdata = list()
-        stun = None
-        m = None
-        counter = 1
-        for ts, pkt in dpkt.pcap.Reader(open(snoop,'rb')):
-            ts = str(datetime.datetime.utcfromtimestamp(ts))
-            eth=dpkt.ethernet.Ethernet(pkt)             
-            try:            
-                stun = eth.data.data.data#.__name__                
-                ip_port = printip(eth)
-                csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, counter)            
-            
-                m = STUN(stun)     
-                
-                if m.type >= 0x4000 and m.type <= 0x4004:
-                    m2 = STUN(stun[4:])   
-                    m = m2 #swap with TURN
-
-                if m.type in StunStatus.messages:
-                    csvi.message_type = StunStatus.messages[m.type]
-                    cutoff = int( len(stun) - len(m.data) )
-                    transaction_id = []
-                    for i in range(8, cutoff):
-                        transaction_id.append(hex(stun[i]))
-                    #print("[TRANSACTION ID]:", transaction_id)
-                    attrs = parse_attrs(m.data)         
-                    for a in attrs:
-                        '''
-                            The format of the XOR-MAPPED-ADDRESS is:
-                            0                   1                   2                   3
-                            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-                            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-                            |x x x x x x x x|    Family     |         X-Port                |
-                            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-                            |                X-Address (Variable)
-                            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-                        '''
-                        
-                        if a[0] in StunStatus.attrs:
-                            #print("[[[ ", StunStatus.attrs[a[0]], " ]]]")
-                            #print (">>> ", a , ">>> len:" ,len(a[1]))
-                            attr = int(a[0])
-#                            A = "{} : {}".format(ip_port[2], ip_port[3])
-#                            B = "{} : {}".format(ip_port[0], ip_port[1])
-                            if attr is XOR_PEER_ADDRESS:
-                                xport = int ((a[1][2] << 8) | a[1][3])
-                                xport = (MAGIC_COOKIE >> 16) ^ xport
-                                ip_orig = a[1][4] << 24 | a[1][5] << 16 | a[1][6] << 8 | a[1][7]
-                                ip_orig ^= MAGIC_COOKIE
-                                ip_xtype = [(ip_orig >> 24) & 0xFF, (ip_orig >> 16) & 0xFF, (ip_orig >> 8) & 0xFF, ip_orig & 0xFF]
-                                k =  "{}.{}.{}.{} : {}".format(ip_xtype[0], ip_xtype[1], ip_xtype[2], ip_xtype[3], xport)
-                                csvi.xor_p_address = k
-                            elif attr is DATA:
-                                innerstun = STUN(attrs[1][1])
-                                print (innerstun.type)
-                            elif attr is XOR_MAPPED:
-                                pass
-                            elif attr is USERNAME:
-                                csvi.uname = attrs[0][1]
-                                if m.type is ALLOCATE_REQUEST or m.type is CREATE_PERMISSION:
-                                    csvi.uname = attrs[1][1]
-                    csvdata.append(csvi)
-               
-                else:
-                    csvi.message_type = hex(m.type)
- #                    print("[[ UNKNOWN STATUS ]]") #should not get here if full STUN support implemented
-                counter+=1
-            except:
-                print("Exception ...")
-                pass
-        return csvdata
-
+#TODO: move in separte app 
 if __name__ == "__main__":
 
     home = Utils.home_dir()
@@ -494,16 +449,10 @@ if __name__ == "__main__":
     for f in files:
         if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
             pcapfile = f
-            #Utils.pcap_walker(pcapfile)
-            if False:
-                csv_items = Utils.parse_stun(pcapfile)
-               
-            else:
-                caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
-                caplst = caps.readpkts()
-                csv_items = Utils.pcap_walker(caplst)
-            
-            csv_items.sort()
+            caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
+            caplst = caps.readpkts()
+            csv_items = Utils.pcap_walker(caplst)
+            csv_items.sort() # overriden  < and == 
             with  open("{}.csv".format(pcapfile), 'w', newline='') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=CsvEnums.rows)
                 writer.writeheader()
