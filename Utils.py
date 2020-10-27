@@ -187,11 +187,22 @@ class CapCtx:
 
 
     def user_fix(self):
+        def quick_cmp(str1, str2):
+            l1 = len(str1)
+            l2 = len(str2)
+            strlen = l2 if l1 > l2 else l1
+            i=0
+            for i in range(0, strlen):
+                if str1[i] != str2[i]:
+                    break
+            return str1[i] > str2[i]
+            
+
         if self.uname is not None:
             try:
                 uname = self.uname.split(":")
                 if len(uname) == 2:
-                    if uname[0][0] > uname[1][0]:
+                    if quick_cmp(uname[0], uname[1]):#uname[0][0] > uname[1][0]:
                         t = uname[0]
                         uname[0] = uname[1]
                         uname[1] = t
@@ -449,6 +460,7 @@ if __name__ == "__main__":
     for f in files:
         if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
             pcapfile = f
+            print ("Processing file: {", f, "}")
             caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
             caplst = caps.readpkts()
             csv_items = Utils.pcap_walker(caplst)
