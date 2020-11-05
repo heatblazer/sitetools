@@ -26,7 +26,7 @@ import struct
 # Each packet has a 20 byte header followed by 0 or more attribute TLVs.
 
 MAGIC_COOKIE = 0x2112A442
-
+TURN_OFFSET = 4
 TURN_RANGE_MIN = 0x4000
 TURN_RANGE_MAX = 0x4004
 
@@ -168,6 +168,7 @@ class CapCtx:
         self.counter = counter
         self.uname_sorted = None
         self.has_children = False
+        self.root_cnt = 1
 
     def user(self):
         if self.uname is not None:
@@ -179,11 +180,10 @@ class CapCtx:
         return None
 
     def __lt__(self, other):
-        return self.counter < other.counter 
+        return self.counter < other.counter
 
     def __eq__(self, other):
         return self.counter == other.counter 
-
 
 
     def user_fix(self):
@@ -199,18 +199,16 @@ class CapCtx:
             
 
         if self.uname is not None:
-            try:
+            if ":" in self.uname:
                 uname = self.uname.split(":")
                 if len(uname) == 2:
-                    if quick_cmp(uname[0], uname[1]):#uname[0][0] > uname[1][0]:
+                    if quick_cmp(uname[0], uname[1]):
                         t = uname[0]
                         uname[0] = uname[1]
                         uname[1] = t
                     uname  = ":".join(uname)
                     return uname
-            except:
-                return self.uname
-        return self.uname
+            return self.uname
 
 
 #Packet, Time, Address A,Port A,Address B,Port B, STUN Command ,Username,Username Sorted,XOR-PEER-ADDRESS
@@ -228,7 +226,7 @@ class CapCtx:
             CsvEnums.rows[8]:self.user_fix(),
             CsvEnums.rows[9]:self.xor_p_address, 
             CsvEnums.rows[10]:self.has_children,
-            CsvEnums.rows[11]:self.counter})
+            CsvEnums.rows[11]:str("{}.{}".format(self.counter, self.root_cnt))})
              
 
 def tlv(buf):
@@ -338,7 +336,6 @@ class Utils(object):
     @staticmethod
     def dump_stun(stun, m, ip_port, ts, frameno):
         stuns = list()
-        #ip_port[0], ip_port[1], ip_port[2], ip_port[3],
         if m.type not in StunStatus.messages:
             return stuns
         csvi = CapCtx(ip_port[0], ip_port[1], ip_port[2], ip_port[3], ts, frameno)
@@ -366,6 +363,7 @@ class Utils(object):
                     csvi.uname = attrs[sindex][1]
                 elif attr is DATA:
                     csvi.has_children = True
+                    csvi.root_cnt += 1
                     s = STUN(attrs[sindex][1])
                     stuns = stuns + Utils.dump_stun(attrs[sindex][1], s, ip_port, ts, csvi.counter)
             sindex+=1
@@ -378,36 +376,24 @@ class Utils(object):
         integerpart = []
         for b in bdat:
             integerpart.append(int(b))
-
         if endiness is False:
             integerpart.reverse()
         result = 0
         for i in range(0, len(integerpart)):
-            result |= integerpart[i] << (i * 8)
-                    
+            result |= integerpart[i] << (i * 8)                    
         return result 
 
     @staticmethod
     def printip(e):
-            try:
-                ip_hdr = e.data
-                dst_ip_addr_str = socket.inet_ntoa(ip_hdr.dst)
-                src_ip_addr_str = socket.inet_ntoa(ip_hdr.src)
-                dport = ip_hdr.data.dport
-                sport = ip_hdr.data.sport
-                return (src_ip_addr_str, sport, dst_ip_addr_str, dport)
-            except:
-                return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
-
-
-
-    class StunAnalyzeApp:
-        #TODO: make it a functor for stun sepcifi
-        def __init__(self):
-            pass
-
-        def __call__(self):
-            pass
+        try:
+            ip_hdr = e.data
+            dst_ip_addr_str = socket.inet_ntoa(ip_hdr.dst)
+            src_ip_addr_str = socket.inet_ntoa(ip_hdr.src)
+            dport = ip_hdr.data.dport
+            sport = ip_hdr.data.sport
+            return (src_ip_addr_str, sport, dst_ip_addr_str, dport)
+        except:
+            return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
 
 
 
@@ -422,13 +408,13 @@ class Utils(object):
             stun = eth.data.data.data           
             ip_port = Utils.printip(eth)
             cookie = 0
-            cookiestun, cookieturn  = Utils.btoi(stun[4:8]), Utils.btoi(stun[8:12])
+            cookiestun, cookieturn  = Utils.btoi(stun[TURN_OFFSET:TURN_OFFSET*2]), Utils.btoi(stun[TURN_OFFSET*2:TURN_OFFSET*3])
             if cookiestun != MAGIC_COOKIE and cookieturn != MAGIC_COOKIE:
                 continue
 
             m = STUN(stun)
             if m.type >= TURN_RANGE_MIN and m.type <= TURN_RANGE_MAX:
-                m2 = STUN(stun[4:])   
+                m2 = STUN(stun[TURN_OFFSET:])   
                 m = m2 #swap with TURN
                 cookie = cookieturn
             else:
@@ -446,8 +432,8 @@ class Utils(object):
             
             csvis = Utils.dump_stun(stun, m, ip_port, ts, i+1)   
             csvdata += csvis
-#        for kv in missing:
-#            print ("type: ", hex(kv), " count:", missing[kv])        
+        for kv in missing:
+            print ("missing type: ", hex(kv), " count:", missing[kv])        
         return csvdata
 
 
