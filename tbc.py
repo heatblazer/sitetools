@@ -43,14 +43,14 @@ GET_DELETE = False
 NO_COPY = False
 
 def bakesftp(ip):
-        print("Baking sftp command")
+        print "Baking sftp command"
         path = None
         try:
                 path= ip.replace(".", "_")
                 if os.path.isdir(path) is False:
                         os.mkdir(path)
                 else:
-                        print (path, " exists")
+                        print path, " exists"
 
                 fp = open(str("%s/%s.sh" % (HOME, path)), "w")
                 if GET_DELETE is True:
@@ -60,7 +60,7 @@ def bakesftp(ip):
         except:
                 pass
         cmd = str("mv %s/%s.sh  %s/%s" % (HOME, path, HOME, path))
-        print ("Using ", cmd)
+        print "Using ", cmd
         os.system(cmd)
         return str("%s/%s/%s.sh" %(HOME, path, path))
 

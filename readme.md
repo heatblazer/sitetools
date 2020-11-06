@@ -4,6 +4,10 @@ STUN TOOL:
 - place your captures in a folder where `stundump.exe` is
 - double click `stundump.exe` or run from shell
 - known issues: you may see `invalid TCP dump header` this is `dpkt` library bug, so sorry :) 
+  
+  ==
+  example view:
+  ![](s1.png)
 
 [TODO]:
 - add User,Pass,Host,Port as a `json` fields

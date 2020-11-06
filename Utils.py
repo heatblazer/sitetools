@@ -180,10 +180,10 @@ class CapCtx:
         return None
 
     def __lt__(self, other):
-        return self.counter < other.counter
+        return self.counter <= other.counter and self.root_cnt > other.root_cnt
 
     def __eq__(self, other):
-        return self.counter == other.counter 
+        return self.counter == other.counter
 
 
     def user_fix(self):
@@ -355,7 +355,7 @@ class Utils(object):
                     ip_orig = a[1][4] << 24 | a[1][5] << 16 | a[1][6] << 8 | a[1][7]
                     ip_orig ^= MAGIC_COOKIE
                     ip_xtype = [(ip_orig >> 24) & 0xFF, (ip_orig >> 16) & 0xFF, (ip_orig >> 8) & 0xFF, ip_orig & 0xFF]
-                    k =  "{}.{}.{}.{} : {}".format(ip_xtype[0], ip_xtype[1], ip_xtype[2], ip_xtype[3], xport)
+                    k =  "{}.{}.{}.{}:{}".format(ip_xtype[0], ip_xtype[1], ip_xtype[2], ip_xtype[3], xport)
                     csvi.xor_p_address = k
                 elif attr is XOR_MAPPED:
                     pass
@@ -367,7 +367,6 @@ class Utils(object):
                     s = STUN(attrs[sindex][1])
                     stuns = stuns + Utils.dump_stun(attrs[sindex][1], s, ip_port, ts, csvi.counter)
             sindex+=1
-
         stuns.append(csvi)
         return stuns
 
@@ -404,12 +403,15 @@ class Utils(object):
         for i in range(0, len(packets)):
             ts, pkt = (packets[i])
             ts = str(datetime.datetime.utcfromtimestamp(ts))
-            eth=dpkt.ethernet.Ethernet(pkt)       
-            stun = eth.data.data.data           
-            ip_port = Utils.printip(eth)
-            cookie = 0
-            cookiestun, cookieturn  = Utils.btoi(stun[TURN_OFFSET:TURN_OFFSET*2]), Utils.btoi(stun[TURN_OFFSET*2:TURN_OFFSET*3])
-            if cookiestun != MAGIC_COOKIE and cookieturn != MAGIC_COOKIE:
+            eth=dpkt.ethernet.Ethernet(pkt)
+            try:       
+                stun = eth.data.data.data
+                ip_port = Utils.printip(eth)
+                cookie = 0
+                cookiestun, cookieturn  = Utils.btoi(stun[TURN_OFFSET:TURN_OFFSET*2]), Utils.btoi(stun[TURN_OFFSET*2:TURN_OFFSET*3])
+                if cookiestun != MAGIC_COOKIE and cookieturn != MAGIC_COOKIE:
+                    continue
+            except:
                 continue
 
             m = STUN(stun)

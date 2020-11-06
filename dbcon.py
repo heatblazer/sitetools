@@ -6,7 +6,7 @@ import os
 from db import dbutil as DB
 
 
-G_IMODE = True
+G_IMODE = False
 #"10.164.76.246", 8888, 'hive', paswd=None
 
 '''
@@ -184,7 +184,7 @@ class AppCtx:
 
     def writepretty(self, ob, opt=""):
         self._fp.write(opt)
-        json.dump(ob, self._fp, skipkeys=False, ensure_ascii=True, check_circular=True,allow_nan=True, cls=None, indent=2, separators=None,encoding='utf-8', default=None, sort_keys=False)
+        json.dump(ob, self._fp, skipkeys=False, ensure_ascii=True, check_circular=True,allow_nan=True, cls=None, indent=2, separators=None,encoding='utf-16', default=None, sort_keys=False)
         self._fp.write("\r\n")
         self._fp.flush()
 
