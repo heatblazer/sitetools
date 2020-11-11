@@ -1,0 +1,16 @@
+{
+	"main-separator" : "CAT_PDFE_", 
+     "short-export" : false, 	
+	 "ui-mode" : false, 
+	 "sau-log-file" : "C:\\Users\\izapryanov.VERINT\\Desktop\\SauLOG\\trunk.txt",
+	 "path" : "C:\\Users\\izapryanov.VERINT\\Desktop\\SauLOG",
+		"ipmatch": {			
+			"name" : "108.177.14.188" 
+		},
+		"ipmatch2": {			
+			"name" : "64.233.165.188" 
+		},
+		"ipmatch3" : {
+			"name": "173.194.222.188"
+		}
+}

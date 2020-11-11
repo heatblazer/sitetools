@@ -253,6 +253,14 @@ class Utils(object):
     sresult = [] 
 
     @staticmethod
+    def is_json(d):
+        """poorman validator of possible json """
+        if d is None:
+            return False
+        d = str(d)
+        return d[0] == '{' and d[len(d)-1] == '}'
+
+    @staticmethod
     def unlink(fname):
         pass
 
@@ -404,7 +412,7 @@ class Utils(object):
             ts, pkt = (packets[i])
             ts = str(datetime.datetime.utcfromtimestamp(ts))
             eth=dpkt.ethernet.Ethernet(pkt)
-            try:       
+            try:     
                 stun = eth.data.data.data
                 ip_port = Utils.printip(eth)
                 cookie = 0

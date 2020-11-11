@@ -1,5 +1,6 @@
 import json
 
+
 class dbutil(object):
 
     def __init__(self):
@@ -34,13 +35,13 @@ class dbutil(object):
     def dumpall(self):
         if self._db is not None:
             for record in self._db:
-                print str("%s:%s" % (record, self._db[record]))
+                print( str("%s:%s" % (record, self._db[record])))
 
 
     def lsession(self):
         if self._db is not None:
             for rec in self._db:
-                print rec
+                print (rec)
 
 
     def add_session(self, name):
@@ -80,7 +81,7 @@ class dbutil(object):
     def get_all_sessions_cnt(self):
         if self._db is not None:
             for q in self._db:
-                print str("session: {%s} : queries [%s]" % (q, self.get_queries_count(q)))
+                print( str("session: {%s} : queries [%s]" % (q, self.get_queries_count(q))))
 
 
     def get_queries_count(self, name):
@@ -133,7 +134,7 @@ if __name__ == "__main__":
     if True:
         db.lsession()
 
-        print "Queries in 'session2'",  db.get_queries_count('session2')
+        print ("Queries in 'session2'",  db.get_queries_count('session2'))
         #db.dumpall()
         #print db.get_bottom_query('session2')
 

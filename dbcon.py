@@ -6,6 +6,16 @@ import os
 from db import dbutil as DB
 
 
+HLP = """--------------------------------------------------------------
+        Use !login! or !l! to login from user in session: ", name
+        Use !at! to select query to execute."
+        \t when prompted ?> enter index."
+        Use !quit! or !q! to return to `imode`.
+        """
+        
+
+
+
 G_IMODE = False
 #"10.164.76.246", 8888, 'hive', paswd=None
 
@@ -117,6 +127,16 @@ class KafkaEventsOb(object):
 
 class AppCtx:
 
+
+    @staticmethod
+    def is_json(d):
+        """poorman validator of possible json """
+        if d is None:
+            return False
+        d = str(d)
+        return d[0] == '{' and d[len(d)-1] == '}'
+
+
     #<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     def __init__(self):
         self._hive, self._postgre = None, None
@@ -144,12 +164,12 @@ class AppCtx:
         self._port = port
         self._user = user
         self._passwd = paswd
-        print "Logging into Hive..."
+        print ("Logging into Hive...")
         try:
             self._hive = presto.connect(host=ip, port=port, username=user).cursor()
-            print "Login success!"
+            print ("Login success!")
         except Exception as ex:
-            print "Login fails: ", ex.message
+            print ("Login fails: ", ex.message)
 
 
 
@@ -166,16 +186,21 @@ class AppCtx:
         '''
         pass
     
-    def execute(self, sqlq):
+    def execute(self, sqlq):        
         try:
             self._hive.execute(sqlq)
             dat = self._hive.fetchall()
             for d in dat:
-                jobj = json.loads(d[5])
+                for dd in d:
+                    if AppCtx.is_json(dd):
+                        jobj = json.loads(dd)
+                    else:
+                        jobj = None
+#                jobj = json.loads(d[4])
                 if jobj is not None:
                     self._jobjects.append(KafkaEventsOb(jobj))
         except Exception as ex:
-            print "Exception in executing {0} -> {1}".format(sqlq, ex.message)
+            print ("Exception in executing {0} -> {1}".format(sqlq, ex.message))
 
     def finalize(self):
         self._fp.close()
@@ -202,21 +227,16 @@ class AppCtx:
 
 
     def print_dbmode(self, msg):
-        print str(">>>%s" % msg)
+        print (str(">>>%s" % msg))
 
 
     def db_run(self, name):
         name = name.rstrip("\r").rstrip("\n")
         if self._db.exists(name) is False:
-            print "No session ", name, " in database"
+            print ("No session ", name, " in database")
             return 
-        print "--------------------------------------------------------------"
-        print "Use !login! or !l! to login from user in session: ", name
-        print "Use !at! to select query to execute."
-        print"\t when prompted ?> enter index."
-        print "Use !quit! or !q! to return to `imode`."
         blog = False
-
+        print(HLP)
         QueriesCnt = int(self._db.get_queries_count(name))
         while True:
             rd = raw_input("db>")
@@ -233,12 +253,12 @@ class AppCtx:
                 elif len(conn) == 4:
                     self.Hive(conn[0], int(conn[1]), str(conn[2]).rstrip("\r").strip("\n"), str(conn[3]).rstrip("\r").strip("\n"))
                 else:
-                    print "Error in HIVE"
+                    print ("Error in HIVE")
                     blog = False
 
             elif "!at!" in rd.lower():
                 if blog is False:
-                    print "Not logged in..."
+                    print ("Not logged in...")
                 else:
                     prmpt = "[0-{0}]>".format(QueriesCnt-1)
                     i = input(prmpt)
@@ -246,8 +266,8 @@ class AppCtx:
                     q = self._db.get_query_at(name, int(i))
                     self.execute(q)
                     for d in self.jdata():
-                        print "************************"
-                        print d.participants()
+                        print ("************************")
+                        print (d.participants())
                         self.writepretty(d)
 
 
@@ -256,7 +276,7 @@ class AppCtx:
         while True:
             rd = raw_input("imode>")
             if "!quit!" in rd.lower() or "!Q!" in rd:
-                print "Bye"
+                print ("Bye")
                 self.finalize()
                 break
             elif "!db!" in rd.lower():
@@ -282,7 +302,7 @@ class AppCtx:
                 try:
                     conn = conn.split(":")
                 except:
-                    print "Invalid format!"
+                    print ("Invalid format!")
                     continue
                 if len(conn) < 3:
                     continue
@@ -291,12 +311,12 @@ class AppCtx:
                 elif len(conn) == 4:
                     self.Hive(conn[0], int(conn[1]), str(conn[2]).rstrip("\r").strip("\n"), str(conn[3]).rstrip("\r").strip("\n"))
                 else:
-                    print "Error in HIVE"
+                    print ("Error in HIVE")
                     continue
             elif "!postgre!" in rd.lower() or "!p!" in rd.lower():
                 pass
             else:
-                print "Unknown command. Type '!help!' to view commands."
+                print ("Unknown command. Type '!help!' to view commands.")
     
 
 
