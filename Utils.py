@@ -151,6 +151,38 @@ class STUN(dpkt.Packet):
 
 #Packet, Time, Address A,Port A,Address B,Port B,STUN Command,Username,Username Sorted,XOR-PEER-ADDRESS
 
+class TLVpacket(dpkt.Packet):
+
+    __hdr__ = (
+        ('tag', 'I', 0),
+        ('length', 'I', 0),
+    )
+
+    def unpack(self, buf):
+        dpkt.Packet.unpack(self, buf)
+        self.data = self.data[:self.length]
+        if len(self.data) < self.length:
+            raise dpkt.NeedData
+    #TLVPacket        
+
+class Frame(dpkt.Packet):
+
+    __hdr__ = (
+        ('length_bytes', '3s', 0),
+        ('type', 'B', 0),
+    )
+
+    @property
+    def length(self):
+        return struct.unpack('!I', b'\x00' + self.length_bytes)[0]
+
+    def unpack(self, buf):
+        dpkt.Packet.unpack(buf)
+        self.data = self.data[:self.length]
+        if len(self.data) != self.length:
+            raise dpkt.NeedData
+
+
 class CsvEnums:             
     rows = ["Packet", "Time","Address A", "Port A", "Address B", "Port B", "STUN Command", "Username", "Username Sorted", "XOR-PEER-ADDRESS", "HAS CHILDREN", "ORIGIN"]
 
@@ -247,6 +279,22 @@ def parse_attrs(buf):
     return attrs
 
 
+def parse_tlv_stream(buf):
+    i = 0
+    packets = []
+    while True:
+        try:
+            p = TLVpacket(buf[i:])
+            packets.append(p)
+            i += len(p)
+        except dpkt.NeedData:
+            break
+    else:
+        pass
+
+    return i, packets
+
+
 class Utils(object):
     """ Utulity functions - static class """
 
@@ -285,13 +333,8 @@ class Utils(object):
         # names in the given directory 
         listOfFile = os.listdir(dirName)
         allFiles = list()
-        # Iterate over all the entries
         for entry in listOfFile:            
-            #if opt is not None and opt(entry) is True:
-            #    continue
-
-            fullPath = os.path.join(dirName, entry)
-                
+            fullPath = os.path.join(dirName, entry)                
             # If entry is a directory then get the list of files in this directory 
             if os.path.isdir(fullPath):
                 allFiles = allFiles + Utils.getListOfFiles(fullPath, opt)
@@ -447,24 +490,34 @@ class Utils(object):
         return csvdata
 
 
+class StunAnalyzer:
+
+    def __init__(self):
+        pass
+
+    def Run(self):
+        print("StunDump exec...")
+        home = Utils.home_dir()
+        files = Utils.getListOfFiles(home)
+        for f in files:
+            if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
+                pcapfile = f
+                print ("Processing file: {", f, "}")
+                caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
+                caplst = caps.readpkts()
+                csv_items = Utils.pcap_walker(caplst)
+                csv_items.sort() # overriden  < and == 
+                with  open("{}.csv".format(pcapfile), 'w', newline='') as csvfile:
+                    writer = csv.DictWriter(csvfile, fieldnames=CsvEnums.rows)
+                    writer.writeheader()
+                    for csvi in csv_items:
+                        csvi.ouput(writer)
+
+
 #TODO: move in separte app 
 if __name__ == "__main__":
+    sd = StunAnalyzer()
+    sd.Run()
 
-    home = Utils.home_dir()
-    files = Utils.getListOfFiles(home)
-
-    for f in files:
-        if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
-            pcapfile = f
-            print ("Processing file: {", f, "}")
-            caps = dpkt.pcap.Reader(open(pcapfile,'rb'))
-            caplst = caps.readpkts()
-            csv_items = Utils.pcap_walker(caplst)
-            csv_items.sort() # overriden  < and == 
-            with  open("{}.csv".format(pcapfile), 'w', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=CsvEnums.rows)
-                writer.writeheader()
-                for csvi in csv_items:
-                    csvi.ouput(writer)
-
+    
 
