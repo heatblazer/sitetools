@@ -514,10 +514,44 @@ class StunAnalyzer:
                         csvi.ouput(writer)
 
 
+class ICMP(dpkt.Packet):
+    __hdr__ = ('type', 'B', 8), 
+    ('code', 'B', 0),
+    ('sum', 'H', 0)
+
+
+class Echo(dpkt.Packet):
+    __hdr__ = (('id', 'H', 0), ('seq', 'H', 0))
+
+
+class GenCapture:
+
+    def __init__(self):
+        pass
+
+
+    def Run(self):
+
+        """ test """
+        wr = dpkt.pcap.Writer(open("test.pcap", "wb"))
+
+
+        for i in range(0, 10):
+            icmp = ICMP()
+            ech = Echo()
+            wr.writepkt(ech)
+            wr.writepkt(icmp)
+
+        pass
+
+
+
 #TODO: move in separte app 
 if __name__ == "__main__":
-    sd = StunAnalyzer()
-    sd.Run()
+    gen = GenCapture()
+    gen.Run()
+    #sd = StunAnalyzer()
+    #sd.Run()
 
     
 
