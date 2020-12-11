@@ -8,6 +8,8 @@ import sys
 import socket
 import datetime
 
+#from simplemodule import * # ivz lib!!!
+
 #xml pareser
 import xml.etree.ElementTree as ET
 
@@ -490,6 +492,7 @@ class Utils(object):
         return csvdata
 
 
+
 class StunAnalyzer:
 
     def __init__(self):
@@ -544,14 +547,45 @@ class GenCapture:
 
         pass
 
+"""
+class UtfGenerator:
+
+    def __init__(self):
+        pass
+
+    def gen_utf8_1(self, a):
+        return genutf81(a)
+    
+    def gen_utf8_2(self, a):           
+        return genutf82(a)
+    
+    def gen_utf8_3(self, a):           
+        return genutf83(a)
+    
+    def gen_utf8_4(self, a):           
+        return genutf84(a)
+    
+"""    
+    
 
 
 #TODO: move in separte app 
 if __name__ == "__main__":
-    gen = GenCapture()
-    gen.Run()
+    #gen = GenCapture()
+    #gen.Run()
     #sd = StunAnalyzer()
     #sd.Run()
-
-    
+    """
+    ut = UtfGenerator()
+    t1 = ut.gen_utf8_1('X')
+    t2 = ut.gen_utf8_2('X')
+    t3 = ut.gen_utf8_3('X')
+    t4 = ut.gen_utf8_4('X')
+ 
+    print(t1)
+    print(t2)
+    print(t3)
+    print(t4)
+    """
+    pass
 
