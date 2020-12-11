@@ -573,19 +573,6 @@ class UtfGenerator:
 if __name__ == "__main__":
     #gen = GenCapture()
     #gen.Run()
-    #sd = StunAnalyzer()
-    #sd.Run()
-    """
-    ut = UtfGenerator()
-    t1 = ut.gen_utf8_1('X')
-    t2 = ut.gen_utf8_2('X')
-    t3 = ut.gen_utf8_3('X')
-    t4 = ut.gen_utf8_4('X')
- 
-    print(t1)
-    print(t2)
-    print(t3)
-    print(t4)
-    """
-    pass
-
+    sd = StunAnalyzer()
+    sd.Run()
+    
