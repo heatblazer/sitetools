@@ -114,8 +114,8 @@ static PyMethodDef module_methods[] = {
 
 static struct PyModuleDef simplemodule = {
     PyModuleDef_HEAD_INIT,
-    "fputs",
-    "Python interface for the fputs C library function",
+    "simplemodule",
+    "Byte maniplator stuff and utf8 generators",
     -1,
     module_methods
 };
