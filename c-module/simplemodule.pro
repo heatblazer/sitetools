@@ -13,4 +13,5 @@ INCLUDEPATH += /usr/include/python3.8
 LIBS += -L/usr/lib64/python3.8 -lpython3.8
 
 DISTFILES += \
+    README.md \
     setup.py
