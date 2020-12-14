@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define MODINIT(MNAME) PyMODINIT_FUNC PyInit_##MNAME
+
+
 static char module_docstring[] =
         "This module provides swap in 4 and swap in 2 functions";
 
@@ -126,7 +129,7 @@ PyMODINIT_FUNC initlibsimplemodule(void)
     (void) Py_InitModule("libsimplemodule", module_methods);
 }
 #else
-PyMODINIT_FUNC PyInit_simplemodule(void) {
+MODINIT(simplemodule)(void) {
     return PyModule_Create(&simplemodule);
 }
 #endif
