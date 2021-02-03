@@ -8,10 +8,11 @@ import sys
 import socket
 import datetime
 
-#from simplemodule import * # ivz lib!!!
-
 #xml pareser
 import xml.etree.ElementTree as ET
+
+#json
+import json
 
 #csv
 import csv #pip install csv
@@ -21,7 +22,6 @@ import dpkt #pip install dpkt
 
 # C like :) 
 import struct
-
 
 # STUN - RFC 3489
 # http://tools.ietf.org/html/rfc3489
@@ -54,20 +54,6 @@ CREATE_PERMISSION_SUCCESS_RESPONSE = 0x0108
 CHANEL_BIND_SUCCESS_RESPONSE = 0x0109
 REFRESH_ERROR_RESPONSE = 0x0114
 
-'''
-[‎10/‎7/‎2020 11:21 AM]  Stoykov, Stanimir:  
- 0x0103	Allocate Success Response
-0x0004	Refresh Request
-0x0104	Refresh Success Response
-0x0009 Channel-Bind request
-0x0017 Data Indication
-0x0108 Create Permission Success Response
-0x0109 Channel-Bind success response
-0x0114 Refresh error response 
-''' 
-
-
-
 # Message Attributes
 MAPPED_ADDRESS = 0x0001
 RESPONSE_ADDRESS = 0x0002
@@ -87,9 +73,17 @@ ICE_CONTROLED = 0x8029
 ICE_CONTROLLING = 0x802a
 XOR_MAPPED = 0x0020
 UNKNOWN = 0xc057
-
+SOFTWARE = 0x8022
+PRIORITY = 0x0024
+RESERVATION_TOKEN = 0x0022
 
 class StunStatus:
+    '''stun session messages and attribs'''
+    class Priorities:
+        '''stun meta'''
+        Telegram = [1853824768]
+        Facebook = [1845501695]
+        Skype = [1862269950, 1862269438, 1862270462]
 
     messages = {BINDING_REQUEST:"BINDING REQUEST",
                 BINDING_RESPONSE:"BINDING RESPONSE",
@@ -127,31 +121,33 @@ class StunStatus:
                 XOR_MAPPED : " XOR MAPPED ADDRESS ",
                 UNKNOWN : "UNKNOWN",
                 XOR_PEER_ADDRESS : "XOR PEER ADDRESS",
-                DATA : "DATA"
+                DATA : "DATA",
+                SOFTWARE : "SOFTWARE",
+                PRIORITY : "PRIORITY",
+                RESERVATION_TOKEN : "RESERVATION TOKEN"
             }
 
 
-
-
+####>> STUN
 class STUN(dpkt.Packet):
     """Simple Traversal of UDP through NAT.
-
     STUN - RFC 3489
     http://tools.ietf.org/html/rfc3489
     Each packet has a 20 byte header followed by 0 or more attribute TLVs.
-
     Attributes:
         __hdr__: Header fields of STUN.
         TODO.
     """
-    
     __hdr__ = (
         ('type', 'H', 0),
         ('len', 'H', 0),
         ('xid', '16s', 0)
     )
+####<< STUN
 
 #Packet, Time, Address A,Port A,Address B,Port B,STUN Command,Username,Username Sorted,XOR-PEER-ADDRESS
+
+
 
 class TLVpacket(dpkt.Packet):
 
@@ -186,7 +182,13 @@ class Frame(dpkt.Packet):
 
 
 class CsvEnums:             
-    rows = ["Packet", "Time","Address A", "Port A", "Address B", "Port B", "STUN Command", "Username", "Username Sorted", "XOR-PEER-ADDRESS", "HAS CHILDREN", "ORIGIN"]
+    rows = ["Packet", "Time","Address A", "Port A", "Address B", "Port B", "STUN Command", 
+    "Username", "Username Sorted", "XOR-PEER-ADDRESS", "HAS CHILDREN", "ORIGIN", "APP-NAME",
+    "CALL DIRECTION", "PRIORITY"]
+
+
+class KafkaEnums:
+    rows = ["Type", "Transport"]
 
 
 class CapCtx:
@@ -203,6 +205,28 @@ class CapCtx:
         self.uname_sorted = None
         self.has_children = False
         self.root_cnt = 1
+        self.name = None
+        self.call_dir = None
+        self.priority = -1 # negative - missing 
+        self.tokens = 0
+#TODO
+    def app(self):
+        if self.uname is None:
+            if self.tokens > 2:
+                self.name = "WhatsApp"
+        else:
+            self.uname = str(self.uname)
+            if ":" in self.uname:
+                s = self.uname.split(":")
+                if self.priority in StunStatus.Priorities.Telegram:
+                    self.name = "Telegram"
+                elif self.priority in StunStatus.Priorities.Facebook:
+                    self.name = "Facebook"
+                elif self.priority in StunStatus.Priorities.Skype:
+                    self.name = "Skype"                    
+                else:
+                    pass
+        return self.name
 
     def user(self):
         if self.uname is not None:
@@ -220,23 +244,12 @@ class CapCtx:
         return self.counter == other.counter
 
 
-    def user_fix(self):
-        def quick_cmp(str1, str2):
-            l1 = len(str1)
-            l2 = len(str2)
-            strlen = l2 if l1 > l2 else l1
-            i=0
-            for i in range(0, strlen):
-                if str1[i] != str2[i]:
-                    break
-            return str1[i] > str2[i]
-            
-
+    def user_fix(self):         
         if self.uname is not None:
-            if ":" in self.uname:
+            if ":" in str(self.uname):
                 uname = self.uname.split(":")
                 if len(uname) == 2:
-                    if quick_cmp(uname[0], uname[1]):
+                    if Utils.quick_cmp(uname[0], uname[1]):
                         t = uname[0]
                         uname[0] = uname[1]
                         uname[1] = t
@@ -245,11 +258,12 @@ class CapCtx:
             return self.uname
 
 
-#Packet, Time, Address A,Port A,Address B,Port B, STUN Command ,Username,Username Sorted,XOR-PEER-ADDRESS
+#Packet, Time, Address A,Port A,Address B,Port B, STUN Command ,Username,Username Sorted,XOR-PEER-ADDRESS, Origin, APP NAME, CALL DIR
 
     def ouput(self, csvwriter):
         if csvwriter is not None:
-            csvwriter.writerow({CsvEnums.rows[0]:self.counter, 
+            csvwriter.writerow({
+            CsvEnums.rows[0]:self.counter, 
             CsvEnums.rows[1]:self.time, 
             CsvEnums.rows[2]:self.srcip, 
             CsvEnums.rows[3]:self.srcport, 
@@ -260,9 +274,13 @@ class CapCtx:
             CsvEnums.rows[8]:self.user_fix(),
             CsvEnums.rows[9]:self.xor_p_address, 
             CsvEnums.rows[10]:self.has_children,
-            CsvEnums.rows[11]:str("{}.{}".format(self.counter, self.root_cnt))})
-             
-
+            CsvEnums.rows[11]:str("{}.{}".format(self.counter, self.root_cnt)),
+            CsvEnums.rows[12]:self.app(),
+            CsvEnums.rows[13]:self.call_dir,
+            CsvEnums.rows[14]:-1#self.priority #let's not shjare the priority for now...
+            })
+###########################################################################################################
+    
 def tlv(buf):
     n = 4
     t, l = struct.unpack('>HH', buf[:n])
@@ -296,7 +314,7 @@ def parse_tlv_stream(buf):
 
     return i, packets
 
-
+####################>>>> UTILS
 class Utils(object):
     """ Utulity functions - static class """
 
@@ -387,6 +405,20 @@ class Utils(object):
 
 
     @staticmethod
+    def quick_cmp(str1, str2):
+        l1 = len(str1)
+        l2 = len(str2)
+        strlen = l2 if l1 > l2 else l1
+        i=0
+        for i in range(0, strlen):
+            if str1[i] != str2[i]:
+                break
+        return str1[i] > str2[i]
+        
+
+
+
+    @staticmethod
     def dump_stun(stun, m, ip_port, ts, frameno):
         stuns = list()
         if m.type not in StunStatus.messages:
@@ -414,6 +446,17 @@ class Utils(object):
                     pass
                 elif attr is USERNAME:
                     csvi.uname = attrs[sindex][1]
+                elif attr == ICE_CONTROLED:
+                    csvi.call_dir = "CALLED"
+                elif attr == ICE_CONTROLLING:
+                    csvi.call_dir = "CALLING"
+                elif attr == SOFTWARE:
+                    print (attrs[sindex][1])
+                    #csvi.name = attrs[sindex][1]
+                elif attr == PRIORITY:
+                    csvi.priority = Utils.btoi(attrs[sindex][1])
+                elif attr == RESERVATION_TOKEN:
+                    csvi.tokens += 1
                 elif attr is DATA:
                     csvi.has_children = True
                     csvi.root_cnt += 1
@@ -448,12 +491,11 @@ class Utils(object):
             return ("de.ad.be.ef", 0xffff, "de.ad.be.ef", 0xffff)
 
 
-
     @staticmethod
     def pcap_walker(packets):
         missing = {}
-        csvdata = list()
-        for i in range(0, len(packets)):
+        csvdata = list()        
+        for i in range(0, len(packets)):            
             ts, pkt = (packets[i])
             ts = str(datetime.datetime.utcfromtimestamp(ts))
             eth=dpkt.ethernet.Ethernet(pkt)
@@ -491,14 +533,61 @@ class Utils(object):
             print ("missing type: ", hex(kv), " count:", missing[kv])        
         return csvdata
 
+    @staticmethod
+    def fix_pcap(cap, n=0):
+        '''todo'''
+        with open(cap, "rb") as fp:
+            ln = fp.read()
+            print(ln)
+            if ln[0] == 10:                
+                bdata = ln[n:len(ln)]
+                fpfix = open(str('%sFix.pcap' % cap), "wb")
+                fpfix.write(struct.pack(str('%sB' % len(bdata)), *bdata))
+                fpfix.close()
+
+################# << UTILS
+
+class KafkaDump:
+
+    def __init__(self, fname):
+        self._fname = fname
+        self._kafkaObj = None
+        with open(self._fname ,'r') as fp:
+            self._kafkaObj = json.load(fp)
+    
+    
+    def Run(self):
+        print("KafkaDump exec...")
+        home = Utils.home_dir()
+        files = Utils.getListOfFiles(home)
+
+        kafkawr = csv.DictWriter(open("out.csv", "w"), fieldnames=KafkaEnums.rows)
+        kafkawr.writeheader()
+
+
+        for rec in self._kafkaObj:
+            if rec == "type":
+                print(rec, "--", self._kafkaObj[rec])
+                kafkawr.writerow({KafkaEnums.rows[0] : self._kafkaObj[rec]})
+            elif  rec == "transport":
+                kafkawr.writerow({KafkaEnums.rows[1] : self._kafkaObj[rec]})
+                if "ip_access_network" in self._kafkaObj[rec]:
+                    for r in self._kafkaObj[rec]["ip_access_network"]:
+                        print(r)
+#                        arr.update({'ip_access_network' : self._kafkaObj[rec]["ip_access_network"]})
+                if "ip_connections" in self._kafkaObj[rec]:
+                    for r in self._kafkaObj[rec]["ip_connections"]:
+                        print(r)
+#                        arr.update({'ip_connections' : self._kafkaObj[rec]["ip_connections"]})
 
 
 class StunAnalyzer:
 
     def __init__(self):
-        pass
+        self.dummy = None
 
-    def Run(self):
+
+    def Run(self, args=[]):
         print("StunDump exec...")
         home = Utils.home_dir()
         files = Utils.getListOfFiles(home)
@@ -517,62 +606,11 @@ class StunAnalyzer:
                         csvi.ouput(writer)
 
 
-class ICMP(dpkt.Packet):
-    __hdr__ = ('type', 'B', 8), 
-    ('code', 'B', 0),
-    ('sum', 'H', 0)
-
-
-class Echo(dpkt.Packet):
-    __hdr__ = (('id', 'H', 0), ('seq', 'H', 0))
-
-
-class GenCapture:
-
-    def __init__(self):
-        pass
-
-
-    def Run(self):
-
-        """ test """
-        wr = dpkt.pcap.Writer(open("test.pcap", "wb"))
-
-
-        for i in range(0, 10):
-            icmp = ICMP()
-            ech = Echo()
-            wr.writepkt(ech)
-            wr.writepkt(icmp)
-
-        pass
-
-"""
-class UtfGenerator:
-
-    def __init__(self):
-        pass
-
-    def gen_utf8_1(self, a):
-        return genutf81(a)
-    
-    def gen_utf8_2(self, a):           
-        return genutf82(a)
-    
-    def gen_utf8_3(self, a):           
-        return genutf83(a)
-    
-    def gen_utf8_4(self, a):           
-        return genutf84(a)
-    
-"""    
-    
-
-
 #TODO: move in separte app 
 if __name__ == "__main__":
-    #gen = GenCapture()
-    #gen.Run()
+#    kafkadmp = KafkaDump("test.json")
+#    kafkadmp.Run()    
     sd = StunAnalyzer()
     sd.Run()
+
     
