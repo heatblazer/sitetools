@@ -587,10 +587,25 @@ class StunAnalyzer:
         self.dummy = None
 
 
-    def Run(self, args=[]):
+    def Run(self, args):
+        optFolder = None
+        optFiles = []
         print("StunDump exec...")
+        print(args)
+        for i in range(0, len(args)):
+            print(args[i])
+            if args[i] == "-d":
+                optFolder = args[i+1]
+                break
+            elif args[i] == "-f":
+                i+=1
+                for j in range(i, len(args)):
+                    optFiles.append(args[j])
+                break
+        #todo - make it for directories
         home = Utils.home_dir()
-        files = Utils.getListOfFiles(home)
+        files = Utils.getListOfFiles(home) if len(optFiles) == 0 else optFiles
+
         for f in files:
             if (".pcap" in f or ".snoop" in f) and ".csv" not in f:
                 pcapfile = f
@@ -611,6 +626,6 @@ if __name__ == "__main__":
 #    kafkadmp = KafkaDump("test.json")
 #    kafkadmp.Run()    
     sd = StunAnalyzer()
-    sd.Run()
+    sd.Run(sys.argv)
 
     
