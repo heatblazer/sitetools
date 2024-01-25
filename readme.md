@@ -99,3 +99,27 @@ Participants:	[
 
 ------------
 ```
+
+GPLPREP TOOL:
+THIS SCRIPT IS MADE FOR DEVELOPERS. 
+If you are just looking for a devops or dev sec ops or whatever ops you are and have no idea what Vulka, Glfw and GLM are and how to build them separately,
+don't bother with this.
+GLFW and Vulkan have a lot of prerequisites, please prepare those before you run the script. The script does not deal with apt install or dnf install
+for xrandr-devel or mesa drivers.
+This is a simple and stupid script to setup vulkan with glfw and glm for development. A lot of tutorials and guides were present on the net
+however all of them is missing the `push one button and wait`. This script as is not perfect aims to achieve this.
+The below variables GLM GLFW and VULKAN can and shall (Vulkan especially) be changed with the relevant links. 
+This thing is supposed to be run as a one command. 
+It will - clone glfw glm and download vulkan. 
+It will - create a folder External and put all of the needed include and lib for all of those.
+It will create a one folder to put in your root and just use it in your projects.
+It will create a hint cmake file what to include and how to link (yeah since there are always tons of questions how to do that)
+It will NOT install any prerequisites.
+It will not ask you for a password besides the ./vulkansk script that builds vulkan  bash.sys_exec("./vulkansdk --maxjobs --skip-deps") if you are not happy
+with that remove the line and run it later.
+
+I am not a pro when doing those yak shaving 1000 times so I've made it for other that want to focus on the graphics instead of the artrocious setups we
+have to deal each time.
+
+Have fun.
+P.S. It's linux only, feel free to extend it for win32 too.

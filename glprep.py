@@ -1,3 +1,27 @@
+'''
+THIS SCRIPT IS MADE FOR DEVELOPERS. 
+If you are just looking for a devops or dev sec ops or whatever ops you are and have no idea what Vulka, Glfw and GLM are and how to build them separately,
+don't bother with this.
+GLFW and Vulkan have a lot of prerequisites, please prepare those before you run the script. The script does not deal with apt install or dnf install
+for xrandr-devel or mesa drivers.
+This is a simple and stupid script to setup vulkan with glfw and glm for development. A lot of tutorials and guides were present on the net
+however all of them is missing the `push one button and wait`. This script as is not perfect aims to achieve this.
+The below variables GLM GLFW and VULKAN can and shall (Vulkan especially) be changed with the relevant links. 
+This thing is supposed to be run as a one command. 
+It will - clone glfw glm and download vulkan. 
+It will - create a folder External and put all of the needed include and lib for all of those.
+It will create a one folder to put in your root and just use it in your projects.
+It will create a hint cmake file what to include and how to link (yeah since there are always tons of questions how to do that)
+It will NOT install any prerequisites.
+It will not ask you for a password besides the ./vulkansk script that builds vulkan  bash.sys_exec("./vulkansdk --maxjobs --skip-deps") if you are not happy
+with that remove the line and run it later.
+
+I am not a pro when doing those yak shaving 1000 times so I've made it for other that want to focus on the graphics instead of the artrocious setups we
+have to deal each time.
+
+Have fun.
+'''
+
 #verbosity
 import warnings
 
@@ -8,6 +32,10 @@ import sys
 import socket
 import datetime
 import requests
+#User modified
+GLM = "git clone https://github.com/g-truc/glm"
+GLFW = "git clone https://github.com/glfw/glfw"
+VULKAN = "https://sdk.lunarg.com/sdk/download/1.3.275.0/linux/vulkansdk-linux-x86_64-1.3.275.0.tar.xz"
 
 
 
@@ -201,9 +229,6 @@ class Utils:
 
 #################  UTILS
 
-GLM = "git clone https://github.com/g-truc/glm"
-GLFW = "git clone https://github.com/glfw/glfw"
-VULKAN = "https://sdk.lunarg.com/sdk/download/1.3.275.0/linux/vulkansdk-linux-x86_64-1.3.275.0.tar.xz"
 
 class InitializeAll:
 
@@ -230,7 +255,7 @@ class InitializeAll:
             print(self.vkpath)
             bash = Utils.Cmd()
             bash.sys_exec("./vulkansdk --maxjobs --skip-deps")
-#            bash.sys_exec("source setup-env.sh")
+            bash.sys_exec("source setup-env.sh")
             bash.sys_exec("cp -rf {}/* {}/External/vulkan".format(self.vkpath, Utils.home()))
         except:
             print("Invalid file or URL")
@@ -254,12 +279,10 @@ class InitializeAll:
         Utils.chdir("{}/tmp/glfw".format(Utils.home()))
         git = Utils.Cmd("cp -r include/ {}/External".format(Utils.home()))
         git()
-        git = Utils.Cmd("cmake -S . -B build")
-        git()
+        git.execute("cmake -S . -B build")
         print(git.std_out())
         Utils.chdir("{}/tmp/glfw/build".format(Utils.home()))
-        git = Utils.Cmd("make")
-        git()
+        git.execute("make")
         print(git.std_out())
         Utils.chdir("{}/tmp/glfw/build/src".format(Utils.home()))
         git = Utils.Cmd("cp *.a {}".format(Utils.home_dir()+"/"+"External/lib"))
@@ -277,13 +300,13 @@ class InitializeAll:
         Utils.mkdir("include")
         Utils.mkdir("vulkan")
         Utils.chdir(Utils.home() + "/" + "tmp")
+        self.prep_vulkan()
+        Utils.chdir(Utils.home() + "/" + "tmp")
         self.prep_glfw()
         Utils.chdir(Utils.home() + "/" + "tmp")
         self.prep_glm()
-        Utils.chdir(Utils.home() + "/" + "tmp")
-        self.prep_vulkan()
-#        deleter = Utils.Cmd("rm -rf * {}/tmp".format(Utils.home()))
-#        deleter()
+        deleter = Utils.Cmd("rm -rf * {}/tmp".format(Utils.home()))
+        deleter()
 
     def create_cmake(self):
         print("Creating CMAKE helper directives")
@@ -294,12 +317,12 @@ class InitializeAll:
             fp.write('# please put the External folder to the CMAKE_SOURCE_DIR (root of your project)\n')
             fp.write('# copy paste the below CMAke directives to your project\n')
             fp.write('find_package(Vulkan REQUIRED FATAL_ERROR)\n')
-            fp.write('target_include_directories(replace-me PRIVATE ${CMAKE_SOURCE_DIR}/External/include)\n')
+            fp.write('target_include_directories(replace-me PRIVATE ${CMAKE_SOURCE_DIR}/External/include ${CMAKE_SOURCE_DIR}/External/vulkan/include) \n')
             fp.write('add_library(libglfw3 STATIC IMPORTED)\n')
             fp.write('link_directories(${CMAKE_SOURCE_DIR}/External/lib)\n')
-            fp.write('target_link_libraries(replace-me -L${CMAKE_SOURCE_DIR}/External/lib)\n')
+            fp.write('link_directories(${CMAKE_SOURCE_DIR}/External/lib64)\n')
             fp.write('target_link_libraries(replace-me glfw3)\n')
-            fp.write('link_directories(/home/ilian/opt/VulkanSDK/1.3.275.0/x86_64/lib64\n')
+            fp.write('target_link_libraries(replace-me vulkan)\n')            
             fp.close()
         except:
             pass
