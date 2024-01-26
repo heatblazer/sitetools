@@ -309,7 +309,7 @@ class InitializeAll:
         deleter()
 
     def create_cmake(self):
-        print("Creating CMAKE helper directives")
+        print("Creating CMAKE helper directives (copy those in your CMake project)")
         Utils.chdir("{}/External".format(Utils.home()))
         try:
             fp = open("cmake_directives.txt", "w+")
@@ -332,6 +332,6 @@ if __name__ == "__main__":
     print("Starting up preparation...")
     initializer = InitializeAll()
     initializer.init_all()
-    #initializer.create_cmake()
+    initializer.create_cmake()
 
     
