@@ -1,3 +1,5 @@
+#!/bin/python
+
 #verbosity
 import warnings
 
@@ -145,8 +147,9 @@ class Cmp:
 
 if __name__ == "__main__":
 
+    os.chdir("/home/ilian/Downloads")
     c = Cmp(".torrent")
-    torrentfiles = Utils.getListOfFiles(Utils.home_dir(), c)
+    torrentfiles = Utils.getListOfFiles("/home/ilian/Downloads", c)
     for t in torrentfiles:
         Utils.unlink(t)
     
