@@ -244,8 +244,10 @@ class InitializeAll:
     def prep_vulkan(self):
         print ("Enter preparing VULKAN, may take a while...")
         try:
-            r = requests.get(VULKAN, allow_redirects=True)
-            open('vktmp.tar.xz', 'wb').write(r.content)
+            bash = Utils.Cmd()
+#            r = requests.get(VULKAN, allow_redirects=True)
+            bash.sys_exec("wget {}".format(VULKAN))
+#            open('vktmp.tar.xz', 'wb').write(r.content)
             tar = Utils.Cmd("tar -xf *")
             tar()
             tar = Utils.Cmd("rm vktmp.tar.xz")
@@ -253,7 +255,6 @@ class InitializeAll:
             self.find_vk_dir()
             Utils.chdir(self.vkpath)
             print(self.vkpath)
-            bash = Utils.Cmd()
             bash.sys_exec("./vulkansdk --maxjobs --skip-deps")
             bash.sys_exec("source setup-env.sh")
             bash.sys_exec("cp -rf {}/* {}/External/vulkan".format(self.vkpath, Utils.home()))
@@ -267,8 +268,8 @@ class InitializeAll:
         git = Utils.Cmd(GLM)
         git()
         Utils.chdir("{}/tmp/glm".format(Utils.home()))
-        git = Utils.Cmd("cp -r glm/ {}/External/include".format(Utils.home()))
-        git()
+        cp = Utils.Cmd("cp -r glm/ {}/External/include".format(Utils.home()))
+        cp()
         print("Finished preparing GLM")
 
 
