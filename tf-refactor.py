@@ -149,7 +149,7 @@ class Utils:
                 allFiles = allFiles + Utils.getListOfFiles(fullPath, opt)
             else:
                 if opt is not None:
-                    if opt(fullPath):
+                    if opt(fullPath) is True:
                         allFiles.append(fullPath)
                 else:
                     allFiles.append(fullPath)
@@ -231,38 +231,25 @@ class Utils:
 class InitializeAll:
 
     def __init__(self, rootfolder):
-        self.rootfolder = Utils.chdir(rootfolder)
+        r = "{}/{}".format(Utils.home_dir(), rootfolder)
+        self.rootfolder = Utils.chdir(r)
         list_files = Utils.getListOfFiles(self.rootfolder, lambda p: False if "terragrunt-cache" not in p else True)
-        for i in list_files:
-            print(i)
+        self.planned = []
         pass
 
-    def find_vk_dir(self):
-        for d in os.listdir("{}/tmp".format(Utils.home())):
-            if os.path.isdir(d):
-                self.vkpath = "{}/tmp/{}".format(Utils.home(), d)
+    def planAll(self):
 
-    def prep_vulkan(self):
-        print ("Enter preparing VULKAN, may take a while...")
-        try:
-            bash = Utils.Cmd()
-#            r = requests.get(VULKAN, allow_redirects=True)
-            bash.sys_exec("wget {}".format(VULKAN))
-#            open('vktmp.tar.xz', 'wb').write(r.content)
-            tar = Utils.Cmd("tar -xf *")
-            tar()
-            tar = Utils.Cmd("rm vktmp.tar.xz")
-            tar()
-            self.find_vk_dir()
-            Utils.chdir(self.vkpath)
-            print(self.vkpath)
-            bash.sys_exec("./vulkansdk --maxjobs --skip-deps")
-            bash.sys_exec("source setup-env.sh")
-            bash.sys_exec("cp -rf {}/* {}/External/vulkan".format(self.vkpath, Utils.home()))
-        except:
-            print("Invalid file or URL")
+        files = Utils.getListOfFiles(self.rootfolder, lambda p: True if "terraagrunt.hcl" in p else False)
+        for f in files:
+            f = f.split("/")
+            f = "/{}".format("/".join(f[1:-1]))            
+            self.planned.append(f)
 
-
+        for p in self.planned:
+            shell = Utils.Cmd("touch poop.txt")
+            Utils.chdir(p)
+            shell()
+        
 
     def prep_glm(self):
         print ("Enter preparing GLM")
@@ -274,70 +261,18 @@ class InitializeAll:
         print("Finished preparing GLM")
 
 
-    def prep_glfw(self):
-        print("Enter preparing GLFW")
-        git = Utils.Cmd(GLFW)
-        git()
-        Utils.chdir("{}/tmp/glfw".format(Utils.home()))
-        git = Utils.Cmd("cp -r include/ {}/External".format(Utils.home()))
-        git()
-        git.execute("cmake -S . -B build")
-        print(git.std_out())
-        Utils.chdir("{}/tmp/glfw/build".format(Utils.home()))
-        git.execute("make")
-        print(git.std_out())
-        Utils.chdir("{}/tmp/glfw/build/src".format(Utils.home()))
-        git = Utils.Cmd("cp *.a {}".format(Utils.home_dir()+"/"+"External/lib"))
-        git()
-        print("Finished preparing GLFW")
-
-
-    def init_all(self):
-        Utils.home()
-        Utils.mkdir("tmp")
-        Utils.mkdir("External")
-        Utils.chdir(Utils.home() + "/" + "External")
-        Utils.mkdir("lib")
-        Utils.mkdir("lib64")
-        Utils.mkdir("include")
-        Utils.mkdir("vulkan")
-        Utils.chdir(Utils.home() + "/" + "tmp")
-        self.prep_vulkan()
-        Utils.chdir(Utils.home() + "/" + "tmp")
-        self.prep_glfw()
-        Utils.chdir(Utils.home() + "/" + "tmp")
-        self.prep_glm()
-        deleter = Utils.Cmd("rm -rf * {}/tmp".format(Utils.home()))
-        deleter()
-
-    def create_cmake(self):
-        print("Creating CMAKE helper directives (copy those in your CMake project)")
-        Utils.chdir("{}/External".format(Utils.home()))
-        try:
-            fp = open("cmake_directives.txt", "w+")
-            fp.write('# please replace `replace-me` with the executable or binary you are linikg the project to\n')
-            fp.write('# please put the External folder to the CMAKE_SOURCE_DIR (root of your project)\n')
-            fp.write('# copy paste the below CMAke directives to your project\n')
-            fp.write('find_package(Vulkan REQUIRED FATAL_ERROR)\n')
-            fp.write('target_include_directories(replace-me PRIVATE ${CMAKE_SOURCE_DIR}/External/include ${CMAKE_SOURCE_DIR}/External/vulkan/include) \n')
-            fp.write('add_library(libglfw3 STATIC IMPORTED)\n')
-            fp.write('link_directories(${CMAKE_SOURCE_DIR}/External/lib)\n')
-            fp.write('link_directories(${CMAKE_SOURCE_DIR}/External/lib64)\n')
-            fp.write('target_link_libraries(replace-me glfw3)\n')
-            fp.write('target_link_libraries(replace-me vulkan)\n')            
-            fp.close()
-        except:
-            pass
-
-
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("error: provide path to repo")
-        exit(-1)
-    
-    
-    print("Starting up itf-refactor")
-    ref = InitializeAll(sys.argv[1])
-    pass
+    if True:
+        ref = InitializeAll("test")
+        ref.planAll()
+    else:
+        if len(sys.argv) != 2:
+            print("error: provide path to repo")
+            exit(-1)
+        
+        
+        print("Starting up itf-refactor")
+        ref = InitializeAll(sys.argv[1])
+        pass
 
     
