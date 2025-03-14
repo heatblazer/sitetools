@@ -33,7 +33,6 @@ rm -rf .terragrunt-cache .terraform.lock.hcl
 terragrunt plan
 repeat until the latest TFM module version
 
-Have fun.
 '''
 
 #verbosity
@@ -65,7 +64,6 @@ class Utils:
             self._cmstr = cmstr
             self._out = None
             self._err = None
-            self._dataout = []
             self._dataerr = []
             self.pro = None
             self._vmode = verbose
@@ -76,18 +74,15 @@ class Utils:
 
         def std_out(self):
             if self._out is not None:
-                return self._out
+                return self._out.decode('utf-8')
             else:
-                return None
-
-        def std_out_data(self):
-            return self._dataout
+                return "None"
 
         def std_err(self):
             if self._err is not None:
-                return self._err
+                return self._err.decode('utf-8')
             else:
-                return None
+                return "None"
 
         def flush(self):
             self._out = None
@@ -115,16 +110,7 @@ class Utils:
             if self.pro is not None:
                 self.pro.kill()
             self.pro = None
-
-        def execute_ex(self, cmd):
-            cmd.strip()
-            fp = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            while True:
-                line = fp.stdout.readline()
-                if not line:
-                    break
-                else:
-                    self._dataout.append(line)                        
+            
 
     sresult = [] 
 
@@ -153,8 +139,23 @@ class Utils:
                         allFiles.append(fullPath)
                 else:
                     allFiles.append(fullPath)
-
         return allFiles
+
+    @staticmethod
+    def getDown(dirname, level=0):
+        listOfFile = os.listdir(dirname)
+        allFiles = list()
+        for entry in listOfFile:            
+            fullPath = os.path.join(dirname, entry)                
+            # If entry is a directory then get the list of files in this directory 
+            if level == 0:
+                return allFiles
+            if os.path.isdir(fullPath):
+                allFiles.append(fullPath)
+                allFiles = allFiles + Utils.getDown(fullPath, level-1)
+        return allFiles
+
+        pass
 
     @staticmethod
     def home_dir():
@@ -203,9 +204,11 @@ class Utils:
         return allfiles
 
     @staticmethod
-    def quick_cmp(str1, str2):
+    def quick_cmp(str1, str2, exact=False):
         l1 = len(str1)
         l2 = len(str2)
+        if exact and l1 != l2:
+            return False 
         strlen = l2 if l1 > l2 else l1
         i=0
         for i in range(0, strlen):
@@ -231,48 +234,84 @@ class Utils:
 class InitializeAll:
 
     def __init__(self, rootfolder):
-        r = "{}/{}".format(Utils.home_dir(), rootfolder)
+        r = "{}".format(rootfolder)
+        print(r)
         self.rootfolder = Utils.chdir(r)
-        list_files = Utils.getListOfFiles(self.rootfolder, lambda p: False if "terragrunt-cache" not in p else True)
         self.planned = []
-        pass
-
-    def planAll(self):
-
-        files = Utils.getListOfFiles(self.rootfolder, lambda p: True if "terraagrunt.hcl" in p else False)
+        files = Utils.getListOfFiles(self.rootfolder, lambda p: True if "terragrunt.hcl" in p and "terragrunt-cache" not in p else False)
         for f in files:
             f = f.split("/")
-            f = "/{}".format("/".join(f[1:-1]))            
+            f = "/{}".format("/".join(f[1:-1]))    
             self.planned.append(f)
+        pass
 
+    
+    def tfSwitchFix(self, fix=False):
         for p in self.planned:
-            shell = Utils.Cmd("touch poop.txt")
-            Utils.chdir(p)
-            shell()
+            print(p)
         
+        for p in self.planned:
+            Utils.chdir(p)
+            cached = Utils.getDown(p, 3)
+            for c in cached:
+                print(c)
+                tfexe = "{}/run/macos/tfswitch".format(Utils.home_dir())
+                shell = Utils.Cmd()
+                Utils.chdir(cached[-1])
+                if fix is True:
+                    shell.sys_exec("{} 0.13.7".format(tfexe))
+                    shell.sys_exec("terraform 0.13 upgrade")
+                    shell.sys_exec("terraform init -reconfigure")
+                    shell.sys_exec('terraform state replace-provider "registry.terraform.io/-/aws" "hashicorp/aws"')
+                    shell.sys_exec("{} 0.14.11".format(tfexe))
+                    shell.sys_exec('terraform init')
+                    Utils.chdir(p) # root folder
+                    shell.sys_exec("rm -rf .terragrunt-cache .terraform.lock.hcl")
+                    shell.sys_exec("{} --latest".format(tfexe))
+                    shell.sys_exec("terragrunt plan")
 
-    def prep_glm(self):
-        print ("Enter preparing GLM")
-        git = Utils.Cmd(GLM)
-        git()
-        Utils.chdir("{}/tmp/glm".format(Utils.home()))
-        cp = Utils.Cmd("cp -r glm/ {}/External/include".format(Utils.home()))
-        cp()
-        print("Finished preparing GLM")
+    def validateAll(self):
+        v = Utils.Cmd()
+        for p in self.planned:
+            Utils.chdir(p)
+            print("Start validating on {}".format(p))
+            v.execute("terragrunt validate")
+            print(v.std_err())
+
+    def planAll(self, omit=False):
+        if omit is False:
+            for p in self.planned:
+                print(p)
+            return 
+        for p in self.planned:
+            shell = Utils.Cmd()
+            Utils.chdir(p)
+            print("change to {}".format(p))
+            shell.execute("terragrunt plan")
+            if "ERROR" in shell.std_err():
+                print("ERROR")
+                print(shell.std_err())
 
 
 if __name__ == "__main__":
     if True:
-        ref = InitializeAll("test")
-        ref.planAll()
+        ref = InitializeAll("/Users/izapryanov/Desktop/todo/tg-infra-sheetlog/live/prod/ap-southeast-2/prod")
+        ref.validateAll()
+#        ref.planAll()
+#        ref.tfSwitchFix()
     else:
-        if len(sys.argv) != 2:
+        if len(sys.argv) < 2:
             print("error: provide path to repo")
             exit(-1)
         
-        
-        print("Starting up itf-refactor")
+        plan = False
+        if sys.argv[2] is not None and sys.argv[2] == "-p":
+            plan = True
+
+        print("Starting up itf-refactor: {}".format(sys.argv[1]))
         ref = InitializeAll(sys.argv[1])
+        ref.planAll(plan)
+        ref.tfSwitchFix()
         pass
 
     
